@@ -21,7 +21,7 @@ Dans tous les cas précédents, s'l y a égalité après vérification des condi
 
 ### Exemples
 On suppose deux équipes T1 et T2. 
-* Autour d'une fiole jeune, 1 joueur T1 et 2 joueurs T2 : l'équipe T2 remporte la fiole. 
+* Autour d'une fiole jaune, 1 joueur T1 et 2 joueurs T2 : l'équipe T2 remporte la fiole. 
 * Autour d'une fiole rouge, 1 joueur T1. Personne ne remporte la fiole. 
 * Autour d'une fiole rouge, 2 joueurs T1 et 3 joueurs T2 : T2 remporte la fiole. 
 * Autour d'une fiole verte, 2 joueurs T1 : personne ne remporte la fiole. 
@@ -80,6 +80,8 @@ Notez que vous pourrez ensuite éditer vos propres cartes à l'aide de l'éditeu
 
 Il est ensuite possible de changer la carte utilisée en modifiant le nom de la carte utilisée dans la fonction `init` du `main`:
 `name = _boardname if _boardname is not None else 'yellow-map'``
+
+La vitesse d'affichage peut être modifiée avec le paramètre `game.fps`
 
 :warning: Vous n'avez pas à modifier le code de `pySpriteWorld`
 

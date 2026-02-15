@@ -36,12 +36,12 @@ game = Game()
 
 def init(_boardname=None):
     global player,game
-    name = _boardname if _boardname is not None else 'yellow-map'
+    name = _boardname if _boardname is not None else 'mixed-map'
     #game = Game('./Cartes/' + name + '.json', SpriteBuilder)
     game = Game('Cartes/' + name + '.json', SpriteBuilder)
     game.O = Ontology(True, 'SpriteSheet-32x32/tiny_spritesheet_ontology.csv')
     game.populate_sprite_names(game.O)
-    game.fps = 5  # frames per second
+    game.fps = 10  # frames per second
     game.mainiteration()
     player = game.player
     
