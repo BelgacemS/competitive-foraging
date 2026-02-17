@@ -6,7 +6,7 @@ Template et instructions pour le projet 2026 IA et Jeux
 On propose dans ce projet d'implémenter un jeu stratégique reprenant certaines des notions vues en cours. 
 
 ### Phase de jeu principale
-Chaque jour, deux équipes de plusieurs joueurs (8 par défaut) disposés sur une carte effectuent un choix sur des ressources (5 par défaut) à aller collecter. 
+Chaque jour, deux équipes de plusieurs joueurs disposés sur une carte effectuent un choix sur des ressources à aller collecter. 
 Chaque **ressource** disposée sur le terrain possède un nombre minimal nécessaire pour la collecter, selon son type.  
 Chaque joueur choisit une fiole selon des stratégies que vous devrez définir. Les joueurs doivent être disposés autour des fioles, **sur des cases différentes**. Il y a donc au maximum 8 joueurs autour d'une fiole.   
 
@@ -50,6 +50,7 @@ Une partie se déroule en un nombre fixe de journées. Les scores des joueurs so
 
 
 ### Hypothèses importantes 
+* les décisions des deux équipes sont réalisées **de manière simultanée** (même si à l'affichage une équipe se déplace après l'autre). 
 * Les joueurs ont une **observabilité totale de l'environnement** 
 * Les joueurs ont une mémoire parfaite des évènements, c'est-à-dire qu'ils connaissent l'historique des journées précédentes.  '
 * Les déplacements des joueurs ne sont pas contraints par les autres joueurs (pas de collision), par contre les joueurs doivent être positionnées autour des fioles sur des cases libres
@@ -66,9 +67,9 @@ Pour la partie graphique, vous utiliserez le module `pySpriteWorld` (développé
 Cinq cartes par défaut vous sont proposées pour ce projet  (`yellow-map`, `red-map`, `green-map`, `blue-map`, `mixed-map`): elles comportent 2 équipes de 8 joueurs et 5 fioles au centre de la carte.   
 
 La gestion de la carte s'opère grâce à des calques:
-* un calque `background`, qui contient le fond de la carte avec les restaurants
+* un calque `background`, qui contient le fond de la carte
 * un calque `joueur`, où seront présents les joueurs
-* un calque `ramassable`, qui contiendra les coupe-files éventuels
+* un calque `ramassable`, qui contiendra les fioles
 
 
 Les joueurs et les ramassables sont des objets Python sur lesquels vous pouvez effectuer des opérations classiques.
