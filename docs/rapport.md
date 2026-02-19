@@ -1,8 +1,8 @@
 # Rapport de projet
 
 ## Groupe
-* XXX
-* YYY
+* Khaled Bouhabel
+* Belgacem Smaali
 
 ## Description des choix importants d'implémentation
 
