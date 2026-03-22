@@ -7,6 +7,7 @@ def generer_allocations(nb_joueurs, nb_fioles):
     # etoiles et barres : C(n+k-1, k-1) nb combinaisons possible
 
     allocs = []
+
     def rec(restant, nb_f, courant):
         if nb_f == 1:
             allocs.append(tuple(courant + [restant]))
@@ -89,3 +90,64 @@ def calculer_score(alloc0, alloc1, types_fioles, priorite=0):
             pts[1] += 1
 
     return pts[0], pts[1]
+
+def charger_types_fioles(nom_carte):
+    # charge les types de fioles depuis le JSON de la carte
+    # pas besoin de pygame on lit le fichier directement
+
+    chemin = os.path.join(os.path.dirname(os.path.abspath(__file__)),'pySpriteWorld', 'Cartes', nom_carte + '.json')
+    
+    with open(chemin) as f:
+        carte = json.load(f)
+
+    # mapping des tile ID vers les couleurs
+    tile_types = {306: "jaune", 277: "rouge", 293: "bleue", 338: "verte", 324: "verte"}
+
+    types = []
+    for layer in carte['layers']:
+        if layer['name'] == 'ramassables':
+            for val in layer['data']:
+                if val > 0 and val in tile_types:
+                    types.append(tile_types[val])
+            break
+    return types
+    
+
+def best_response(types_fioles, alloc_adv, allocations):
+    # trouve la meilleure allocation contre une allocation adverse fixe on teste toutes les allocs possibles et on garde la meilleure
+    
+    best, best_gain = allocations[0], -100
+    
+    for alloc in allocations:
+        p0, p1 = calculer_score(alloc, alloc_adv, types_fioles)
+        gain = p0 - p1
+
+        if gain > best_gain:
+            best_gain = gain
+            best = alloc
+
+    return best
+
+
+def analyser_allocations(types_fioles, allocations, k=10, nb_sample=1000):
+    # trouve la meilleure alloc fixe et le top-k en 
+
+    if len(allocations) <= nb_sample:
+        sample = allocations
+    else:
+        sample = random.sample(allocations, nb_sample)
+
+    scores = []
+    
+    for alloc in allocations:
+        wins = 0
+        for adv in sample:
+            p0, p1 = calculer_score(alloc, adv, types_fioles)
+            if p0 > p1: wins += 1
+        scores.append((wins, alloc))
+    scores.sort(reverse=True)
+
+    meilleure = scores[0][1]
+    top = [alloc for _, alloc in scores[:k]]
+
+    return meilleure, top
