@@ -138,7 +138,7 @@ def analyser_allocations(types_fioles, allocations, k=10, nb_sample=1000):
         sample = random.sample(allocations, nb_sample)
 
     scores = []
-    
+
     for alloc in allocations:
         wins = 0
         for adv in sample:
@@ -151,3 +151,20 @@ def analyser_allocations(types_fioles, allocations, k=10, nb_sample=1000):
     top = [alloc for _, alloc in scores[:k]]
 
     return meilleure, top
+
+
+def preparer_carte(nom_carte, nb_joueurs=8):
+    # prepare toutes les donnees pour une carte : types, allocations, meilleures allocs
+    # on fait ca une fois par carte et on reutilise partout pour eviter de recalculer
+
+    print(f"Preparation de {nom_carte}")
+    types = charger_types_fioles(nom_carte)
+    allocs = generer_allocations(nb_joueurs, len(types))
+    
+    print(f"{len(types)} fioles ({', '.join(types)})")
+    print(f"{len(allocs)} allocations possibles")
+
+    meilleure, top = analyser_allocations(types, allocs, k=10)
+    print(f" Meilleure alloc fixe: {meilleure}")
+
+    return {'nom': nom_carte,'types': types,'allocations': allocs,'meilleure_fixe': meilleure,'top_allocs': top,}
