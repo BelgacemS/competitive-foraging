@@ -169,6 +169,62 @@ def main():
         return are_here
 
 
+    def get_fiole_type(fiole):
+
+        tid = fiole.tileid
+        valeur = tid[0] * 16 + tid[1] + 1
+        types = {306: "jaune", 277: "rouge", 293: "bleue", 338: "verte", 324: "verte"}
+        
+        return types.get(valeur, "inconnu")
+
+
+    def score_fiole(type_fiole, nb_j0, nb_j1):
+        # 0 team 0 gagne, 1 team 1 gagne, ou -1 personne
+
+        if type_fiole == "jaune":
+
+            ok0 = nb_j0 >= 1
+            ok1 = nb_j1 >= 1
+
+        elif type_fiole == "rouge":
+
+            ok0 = nb_j0 >= 2
+            ok1 = nb_j1 >= 2
+
+        elif type_fiole == "verte":
+
+            if nb_j0 + nb_j1 >= 3:
+                if nb_j0 > nb_j1: return 0
+                elif nb_j1 > nb_j0: return 1
+            return -1
+
+        elif type_fiole == "bleue":
+
+            if nb_j0 == 1 and nb_j1 >= 2:
+                return 0
+            if nb_j1 == 1 and nb_j0 >= 2:
+                return 1
+ 
+            ok0 = nb_j0 >= 2
+            ok1 = nb_j1 >= 2
+
+        else:
+            return -1
+
+        # regle pour jaune/rouge/bleue
+        if ok0 and ok1:
+            if nb_j0 > nb_j1: 
+                return 0
+            elif nb_j1 > nb_j0:
+                return 1
+            else: 
+                return -1
+        elif ok0: 
+            return 0
+        elif ok1: 
+            return 1
+        return -1
+
 
 
     # -------------------------------
