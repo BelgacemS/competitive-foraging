@@ -302,27 +302,23 @@ def main():
 
         for o in items:
 
-            type = get_fiole_type(o)
+            type_f = get_fiole_type(o)
             nb_j0, nb_j1 = players_around_item(o)
-            resultat = score_fiole(type, nb_j0, nb_j1)
+            resultat = score_fiole(type_f, nb_j0, nb_j1)
 
             if resultat == 0:
                 score[0] += 1
-                print(f"Fiole {type} : {nb_j0} vs {nb_j1} -> equipe 1 gagne")
+                print(f"Fiole {type_f} : {nb_j0} vs {nb_j1} -> equipe 1 gagne")
 
             elif resultat == 1:
                 score[1] += 1
-                print(f"Fiole {type} : {nb_j0} vs {nb_j1} -> equipe 2 gagne")
+                print(f"Fiole {type_f} : {nb_j0} vs {nb_j1} -> equipe 2 gagne")
 
             else:
-                print(f"Fiole {type} : {nb_j0} vs {nb_j1} -> personne")
+                print(f"Fiole {type_f} : {nb_j0} vs {nb_j1} -> personne")
 
         print(f"Score cumule: {score[0]}-{score[1]}")
 
-
-
-        # calcul des points
-        #TODO
 
         # remettre les joueurs à leur pos initiale a la fin de l'episode
 
@@ -350,8 +346,6 @@ def main():
     
     #-------------------------------
 
-    
-   
 
 if __name__ == '__main__':
     main()
