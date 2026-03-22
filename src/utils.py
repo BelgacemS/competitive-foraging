@@ -1,5 +1,7 @@
 import numpy as np
-
+import random
+import json
+import os
 
 def generer_allocations(nb_joueurs, nb_fioles):
     # etoiles et barres : C(n+k-1, k-1) nb combinaisons possible
@@ -14,3 +16,76 @@ def generer_allocations(nb_joueurs, nb_fioles):
     rec(nb_joueurs, nb_fioles, [])
 
     return allocs
+
+def score_fiole(type_fiole, nb_j0, nb_j1):
+        # 0 team 0 gagne, 1 team 1 gagne, ou -1 personne
+
+        if type_fiole == "jaune":
+
+            ok0 = nb_j0 >= 1
+            ok1 = nb_j1 >= 1
+
+        elif type_fiole == "rouge":
+
+            ok0 = nb_j0 >= 2
+            ok1 = nb_j1 >= 2
+
+        elif type_fiole == "verte":
+
+            if nb_j0 + nb_j1 >= 3:
+                if nb_j0 > nb_j1: return 0
+                elif nb_j1 > nb_j0: return 1
+            return -1
+
+        elif type_fiole == "bleue":
+
+            if nb_j0 == 1 and nb_j1 >= 2:
+                return 0
+            if nb_j1 == 1 and nb_j0 >= 2:
+                return 1
+ 
+            ok0 = nb_j0 >= 2
+            ok1 = nb_j1 >= 2
+
+        else:
+            return -1
+
+        # regle pour jaune/rouge/bleue
+        if ok0 and ok1:
+            if nb_j0 > nb_j1: 
+                return 0
+            elif nb_j1 > nb_j0:
+                return 1
+            else: 
+                return -1
+        elif ok0: 
+            return 0
+        elif ok1: 
+            return 1
+        return -1
+
+
+def calculer_score(alloc0, alloc1, types_fioles, priorite=0):
+    # alloc0 et alloc1 = tuples (nb joueurs par fiole pour chaque equipe)
+
+    pts = [0, 0]
+
+    for i, type_f in enumerate(types_fioles):
+        n0, n1 = alloc0[i], alloc1[i]
+
+        if n0 + n1 > 8:
+            if priorite == 0: # l'equipe 0 se place avant
+                n0 = min(n0, 8) 
+                n1 = min(n1, 8 - n0)
+            else:
+                n1 = min(n1, 8)
+                n0 = min(n0, 8 - n1)
+
+        res = score_fiole(type_f, n0, n1)
+
+        if res == 0: 
+            pts[0] += 1
+        elif res == 1: 
+            pts[1] += 1
+
+    return pts[0], pts[1]
