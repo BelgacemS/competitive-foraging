@@ -41,7 +41,7 @@ def init(_boardname=None):
     game = Game('Cartes/' + name + '.json', SpriteBuilder)
     game.O = Ontology(True, 'SpriteSheet-32x32/tiny_spritesheet_ontology.csv')
     game.populate_sprite_names(game.O)
-    game.fps = 10  # frames per second
+    game.fps = 60  # frames per second
     game.mainiteration()
     player = game.player
     
@@ -231,9 +231,10 @@ def main():
     # Strategie aleatoire
     # -------------------------------
 
+    score = [0,0]
 
     for e in range(nb_episodes):
-        priority=[0,1]
+        priority= [0, 1] if e % 2 == 0 else [1, 0]
         for t in priority:
             print("Team ",t)
             path = []
@@ -297,10 +298,26 @@ def main():
         # Calcul des scores
         # -------------------------------
 
+        print(f"Episode {e+1}/{nb_episodes} (priorite: {priority})")
 
-        # calcul du nombre de joueurs autour de chaque fiole
         for o in items:
-            print(players_around_item(o))
+
+            type = get_fiole_type(o)
+            nb_j0, nb_j1 = players_around_item(o)
+            resultat = score_fiole(type, nb_j0, nb_j1)
+
+            if resultat == 0:
+                score[0] += 1
+                print(f"Fiole {type} : {nb_j0} vs {nb_j1} -> equipe 1 gagne")
+
+            elif resultat == 1:
+                score[1] += 1
+                print(f"Fiole {type} : {nb_j0} vs {nb_j1} -> equipe 2 gagne")
+
+            else:
+                print(f"Fiole {type} : {nb_j0} vs {nb_j1} -> personne")
+
+        print(f"Score cumule: {score[0]}-{score[1]}")
 
 
 
@@ -316,6 +333,17 @@ def main():
                 p.set_rowcol(x,y)
                 j+=1
 
+
+    print("\nResultat final")
+    print(f"Score: {score[0]}-{score[1]}")
+    
+
+    if score[0] > score[1]:
+        print("Equipe 1 gagne")
+    elif score[1] > score[0]:
+        print("Equipe 2 gagne")
+    else:
+        print("Egalite")
 
     pygame.quit()
 
