@@ -54,6 +54,19 @@ class AleatoireExpert(Strategie):
     def choisir(self, historique, mon_equipe):
         return random.choice(self.top_allocs)
 
+class AleatoireCoordonne(Strategie):
+    def __init__(self, types_fioles, allocations=None, meilleure_fixe=None, top_allocs=None):
+        super().__init__("coordonne", types_fioles, allocations=allocations, meilleure_fixe=meilleure_fixe, top_allocs=top_allocs)
+
+        if self.top_allocs is None:
+            _, self.top_allocs = analyser_allocations(types_fioles, self.allocations)
+            
+        self.poids = np.array([max(a) for a in self.top_allocs], dtype=float)
+        self.poids /= self.poids.sum()
+
+    def choisir(self, historique, mon_equipe):
+        idx = np.random.choice(len(self.top_allocs), p=self.poids)
+        return self.top_allocs[idx]
 
 class FictitiousPlay(Strategie):
     def __init__(self, types_fioles, allocations=None, meilleure_fixe=None, top_allocs=None):           
