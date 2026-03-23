@@ -41,3 +41,15 @@ class Fixe(Strategie):
 
     def choisir(self, historique, mon_equipe):
         return self.alloc_fixe
+    
+class AleatoireExpert(Strategie):
+    def __init__(self, types_fioles, allocations=None, meilleure_fixe=None, top_allocs=None):
+        super().__init__("expert", types_fioles, allocations=allocations,
+                        meilleure_fixe=meilleure_fixe, top_allocs=top_allocs)
+        
+        # pareil si on a pas les top allocs on les calcule
+        if self.top_allocs is None:
+            _, self.top_allocs = analyser_allocations(types_fioles, self.allocations)
+
+    def choisir(self, historique, mon_equipe):
+        return random.choice(self.top_allocs)
