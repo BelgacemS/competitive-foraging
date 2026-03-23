@@ -15,7 +15,7 @@ class Strategie:
         self.meilleure_fixe = meilleure_fixe
         self.top_allocs = top_allocs
 
-    def choisir(self, historique, mon_equipe):
+    def choisir(self, historique, mon_equipe): # histo c'est une liste
         raise NotImplementedError
 
     def reset(self):
@@ -53,3 +53,29 @@ class AleatoireExpert(Strategie):
 
     def choisir(self, historique, mon_equipe):
         return random.choice(self.top_allocs)
+
+
+class FictitiousPlay(Strategie):
+    def __init__(self, types_fioles, allocations=None, meilleure_fixe=None, top_allocs=None):           
+        super().__init__("fictitious", types_fioles, allocations=allocations, meilleure_fixe=meilleure_fixe, top_allocs=top_allocs) 
+                                 
+        # gains cumules de chaque allocation                              
+        self.gains = np.zeros(len(self.allocations))                                                    
+                                                                
+    def choisir(self, historique, mon_equipe):                                                          
+    
+        if len(historique) == 0:                                
+            # premier tour on a aucune info on joue la meilleure fixe                                
+            return self.meilleure_fixe or random.choice(self.allocations)                               
+                                                                                                        
+        # mise a jour incrementale avec la derniere allo adverse                                       
+        alloc_adv = historique[-1][1]                                                                   
+        for i, alloc in enumerate(self.allocations):                                                    
+            p0, p1 = calculer_score(alloc, alloc_adv, self.types_fioles)
+            self.gains[i] += p0 - p1                                                                    
+                                                                                                        
+        # jouer l'alloc avec le meilleur gain cumule                                                    
+        return self.allocations[np.argmax(self.gains)]                                                  
+                                                                                                        
+    def reset(self):
+        self.gains = np.zeros(len(self.allocations))  
