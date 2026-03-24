@@ -137,16 +137,20 @@ class MetaStrategie(Strategie):
         self.compo = Counter(types_fioles)
         self.all_blue = self.compo.get("bleue", 0) == self.nb_fioles
 
-        # on spread pour les cartes toute bleue 
+        # on spread pour les cartes toute bleue
+        # chaque fiole a 8 cases autour donc max 8 joueurs par fiole
+        max_par_fiole = 8
         if self.all_blue and self.nb_joueurs >= self.nb_fioles:
-            base = [0] * self.nb_fioles
+            base = [1] * self.nb_fioles
+            reste = self.nb_joueurs - self.nb_fioles
 
-            for i in range(min(self.nb_joueurs, self.nb_fioles)):
-                base[i] = 1
-            reste = self.nb_joueurs - min(self.nb_joueurs, self.nb_fioles)
-
-            if reste > 0:
-                base[0] += reste
+            # on repartit le surplus en remplissant fiole par fiole sans depasser le max
+            i = 0
+            while reste > 0 and i < self.nb_fioles:
+                ajout = min(reste, max_par_fiole - base[i])
+                base[i] += ajout
+                reste -= ajout
+                i += 1
             self.spread_blue = tuple(base)
         else:
             self.spread_blue = None
