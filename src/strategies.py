@@ -30,7 +30,7 @@ class AleatoireUniforme(Strategie):
         return random.choice(self.allocations)
 
 
-class Fixe(Strategie):
+class Tetu(Strategie):
     def __init__(self, types_fioles, alloc_fixe=None, allocations=None, meilleure_fixe=None, top_allocs=None):
         super().__init__("tetu", types_fioles, allocations=allocations, meilleure_fixe=meilleure_fixe, top_allocs=top_allocs)
         
@@ -302,3 +302,26 @@ class MetaStrategie(Strategie):
         self.hist_adv = []
         self.classification = None
         self.dernier_recalcul = 0
+
+def creer_strategie(nom, types_fioles, carte_data=None):
+    params = {}
+    if carte_data:
+        params = {
+            'allocations': carte_data['allocations'],
+            'meilleure_fixe': carte_data['meilleure_fixe'],
+            'top_allocs': carte_data['top_allocs'],
+        }
+
+    strats = {
+        "aleatoire": AleatoireUniforme,
+        "tetu": Tetu,
+        "expert": AleatoireExpert,
+        "coordonne": AleatoireCoordonne,
+        "fictitious": FictitiousPlay,
+        "regret": RegretMatching,
+        "meta": MetaStrategie,
+    }
+    if nom not in strats:
+        print(f"Strategie inconnue: {nom}")
+        return None
+    return strats[nom](types_fioles, **params)
