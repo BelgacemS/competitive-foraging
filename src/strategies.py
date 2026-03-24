@@ -23,18 +23,18 @@ class Strategie:
 
 
 class AleatoireUniforme(Strategie):
-    def __init__(self, types_fioles, allocations=None, meilleure_fixe=None, top_allocs=None):
-        super().__init__("aleatoire", types_fioles, allocations=allocations, meilleure_fixe=meilleure_fixe, top_allocs=top_allocs)
+    def __init__(self, types_fioles, allocations=None, meilleure_fixe=None, top_allocs=None, nb_joueurs=8):
+        super().__init__("aleatoire", types_fioles, nb_joueurs=nb_joueurs, allocations=allocations, meilleure_fixe=meilleure_fixe, top_allocs=top_allocs)
 
     def choisir(self, historique, mon_equipe):
         return random.choice(self.allocations)
 
 
 class Tetu(Strategie):
-    def __init__(self, types_fioles, alloc_fixe=None, allocations=None, meilleure_fixe=None, top_allocs=None):
-        super().__init__("tetu", types_fioles, allocations=allocations, meilleure_fixe=meilleure_fixe, top_allocs=top_allocs)
+    def __init__(self, types_fioles, alloc_fixe=None, allocations=None, meilleure_fixe=None, top_allocs=None, nb_joueurs=8):
+        super().__init__("tetu", types_fioles, nb_joueurs=nb_joueurs, allocations=allocations, meilleure_fixe=meilleure_fixe, top_allocs=top_allocs)
         
-        self.alloc_fixe = alloc_fixe or self.meilleure_fixe #celle donner par prepare carte
+        self.alloc_fixe = alloc_fixe or self.meilleure_fixe #celle donner par prepare_carte
         
         if self.alloc_fixe is None:
             self.alloc_fixe, _ = analyser_allocations(types_fioles, self.allocations)
@@ -43,8 +43,8 @@ class Tetu(Strategie):
         return self.alloc_fixe
     
 class AleatoireExpert(Strategie):
-    def __init__(self, types_fioles, allocations=None, meilleure_fixe=None, top_allocs=None):
-        super().__init__("expert", types_fioles, allocations=allocations,
+    def __init__(self, types_fioles, allocations=None, meilleure_fixe=None, top_allocs=None, nb_joueurs=8):
+        super().__init__("expert", types_fioles, nb_joueurs=nb_joueurs, allocations=allocations,
                         meilleure_fixe=meilleure_fixe, top_allocs=top_allocs)
         
         # pareil si on a pas les top allocs on les calcule
@@ -55,8 +55,8 @@ class AleatoireExpert(Strategie):
         return random.choice(self.top_allocs)
 
 class AleatoireCoordonne(Strategie):
-    def __init__(self, types_fioles, allocations=None, meilleure_fixe=None, top_allocs=None):
-        super().__init__("coordonne", types_fioles, allocations=allocations, meilleure_fixe=meilleure_fixe, top_allocs=top_allocs)
+    def __init__(self, types_fioles, allocations=None, meilleure_fixe=None, top_allocs=None, nb_joueurs=8):
+        super().__init__("coordonne", types_fioles, nb_joueurs=nb_joueurs, allocations=allocations, meilleure_fixe=meilleure_fixe, top_allocs=top_allocs)
 
         if self.top_allocs is None:
             _, self.top_allocs = analyser_allocations(types_fioles, self.allocations)
@@ -69,8 +69,8 @@ class AleatoireCoordonne(Strategie):
         return self.top_allocs[idx]
 
 class FictitiousPlay(Strategie):
-    def __init__(self, types_fioles, allocations=None, meilleure_fixe=None, top_allocs=None):           
-        super().__init__("fictitious", types_fioles, allocations=allocations, meilleure_fixe=meilleure_fixe, top_allocs=top_allocs) 
+    def __init__(self, types_fioles, allocations=None, meilleure_fixe=None, top_allocs=None, nb_joueurs=8):
+        super().__init__("fictitious", types_fioles, nb_joueurs=nb_joueurs, allocations=allocations, meilleure_fixe=meilleure_fixe, top_allocs=top_allocs) 
                                  
         # gains cumules de chaque allocation                              
         self.gains = np.zeros(len(self.allocations))                                                    
@@ -95,8 +95,8 @@ class FictitiousPlay(Strategie):
 
 
 class RegretMatching(Strategie):
-      def __init__(self, types_fioles, allocations=None, meilleure_fixe=None, top_allocs=None):
-          super().__init__("regret", types_fioles, allocations=allocations, meilleure_fixe=meilleure_fixe, top_allocs=top_allocs)
+      def __init__(self, types_fioles, allocations=None, meilleure_fixe=None, top_allocs=None, nb_joueurs=8):
+          super().__init__("regret", types_fioles, nb_joueurs=nb_joueurs, allocations=allocations, meilleure_fixe=meilleure_fixe, top_allocs=top_allocs)
 
           self.regrets = np.zeros(len(self.allocations))
 
@@ -127,8 +127,8 @@ class RegretMatching(Strategie):
           self.regrets = np.zeros(len(self.allocations))
 
 class MetaStrategie(Strategie):
-    def __init__(self, types_fioles, allocations=None, meilleure_fixe=None, top_allocs=None):
-        super().__init__("meta", types_fioles, allocations=allocations, meilleure_fixe=meilleure_fixe, top_allocs=top_allocs)
+    def __init__(self, types_fioles, allocations=None, meilleure_fixe=None, top_allocs=None, nb_joueurs=8):
+        super().__init__("meta", types_fioles, nb_joueurs=nb_joueurs, allocations=allocations, meilleure_fixe=meilleure_fixe, top_allocs=top_allocs)
 
         if self.meilleure_fixe is None:
             self.meilleure_fixe, _ = analyser_allocations(types_fioles, self.allocations)
@@ -310,6 +310,7 @@ def creer_strategie(nom, types_fioles, carte_data=None):
             'allocations': carte_data['allocations'],
             'meilleure_fixe': carte_data['meilleure_fixe'],
             'top_allocs': carte_data['top_allocs'],
+            'nb_joueurs': carte_data.get('nb_joueurs', 8), 
         }
 
     strats = {
