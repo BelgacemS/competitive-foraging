@@ -36,7 +36,7 @@ game = Game()
 
 def init(_boardname=None):
     global player,game
-    name = _boardname if _boardname is not None else 'mixed-map'
+    name = _boardname if _boardname is not None else 'blue-map'
     #game = Game('./Cartes/' + name + '.json', SpriteBuilder)
     game = Game('Cartes/' + name + '.json', SpriteBuilder)
     game.O = Ontology(True, 'SpriteSheet-32x32/tiny_spritesheet_ontology.csv')
@@ -78,7 +78,7 @@ def main():
     items = [o for o in game.layers["ramassable"]]  #
     nb_fioles = len(items)
 
-    nb_episodes = 2
+    nb_episodes = 12
 
 
     #-------------------------------
@@ -230,20 +230,79 @@ def main():
     # -------------------------------
     # Strategie aleatoire
     # -------------------------------
+    # on trie les items par position pour que l'ordre soit coherent avec les JSON des maps l'aleatoire s'en fou il fait de l'alleatoire 
+    # car le dico interne dans pygame lors de l'iteration l'odre n"est pas sur
 
+    items.sort(key=lambda o: o.get_rowcol())
+    nb_fioles = len(items)
+
+    use_strategies = True
+    strat_noms = ["meta", "aleatoire"]  # strategie de chaque equipe
+
+    if use_strategies:
+
+        from strategies import creer_strategie
+        from utils import generer_allocations, analyser_allocations
+
+        types_fioles = [get_fiole_type(o) for o in items] # lit les sprites pygame 
+        print(f"nb_players_team = {nb_players_team}")
+        allocs = generer_allocations(nb_players_team, nb_fioles)
+        print("Calcul des meilleures allocations")
+        meilleure, top = analyser_allocations(types_fioles, allocs, k=10)
+
+        carte_data = {
+            'types': types_fioles,
+            'allocations': allocs,
+            'meilleure_fixe': meilleure,
+            'top_allocs': top,
+            'nb_joueurs': nb_players_team,
+        }
+
+        strats = [creer_strategie(strat_noms[0], types_fioles, carte_data),
+                  creer_strategie(strat_noms[1], types_fioles, carte_data)]
+        historiques = [[], []]
+        print(f"Strategies: {strat_noms[0]} vs {strat_noms[1]}")
+              
     score = [0,0]
 
     for e in range(nb_episodes):
         priority= [0, 1] if e % 2 == 0 else [1, 0]
+        allocs_episode = [None, None]
+
         for t in priority:
             print("Team ",t)
             path = []
             choix_fiole = []
             choix_pos = []
+
+            # si on utilise les strategies, on calcule l'allocation pour toute l'equipe
+            if use_strategies:
+                alloc = strats[t].choisir(historiques[t], t)
+                allocs_episode[t] = alloc
+                print(f"alloc = {alloc}, somme = {sum(alloc)}, nb_players_team = {nb_players_team}")
+                
+                # convertir en liste d'assignations (quel joueur va a quelle fiole)
+                idx_assign = []
+                for idx_f, nb in enumerate(alloc):
+                    idx_assign.extend([idx_f] * nb)
+                print(f"len(idx_assign) = {len(idx_assign)}, nb_players_team = {nb_players_team}")
+                random.shuffle(idx_assign)
+
+
             for p in range(0,nb_players_team):
-                f = random.choice(items)
-                while busy(f.get_rowcol()): # si plus de place on choisit une autre fiole
+                if use_strategies:
+                    # assignation basee sur la strategie
+                    f = items[idx_assign[p]]
+                    if busy(f.get_rowcol()):
+                        f = random.choice(items)
+                        while busy(f.get_rowcol()):
+                            f = random.choice(items)
+                else:
+                    # comportement original : choix aleatoire
                     f = random.choice(items)
+                    while busy(f.get_rowcol()):
+                        f = random.choice(items)
+
                 choix_fiole.append(f)
                 # choisir une position libre autour de la fiole choisie
                 chosen_pos = random.choice(around_pos_free(f.get_rowcol()))
@@ -299,25 +358,32 @@ def main():
         # -------------------------------
 
         print(f"Episode {e+1}/{nb_episodes} (priorite: {priority})")
+        pts_ep = [0, 0]
 
         for o in items:
-
-            type_f = get_fiole_type(o)
+            typ = get_fiole_type(o)
             nb_j0, nb_j1 = players_around_item(o)
-            resultat = score_fiole(type_f, nb_j0, nb_j1)
+            res = score_fiole(typ, nb_j0, nb_j1)
 
-            if resultat == 0:
+            if res == 0:
                 score[0] += 1
-                print(f"Fiole {type_f} : {nb_j0} vs {nb_j1} -> equipe 1 gagne")
+                pts_ep[0] += 1
+                print(f"Fiole {typ} : {nb_j0} vs {nb_j1} => equipe 1 gagne")
 
-            elif resultat == 1:
+            elif res == 1:
                 score[1] += 1
-                print(f"Fiole {type_f} : {nb_j0} vs {nb_j1} -> equipe 2 gagne")
+                pts_ep[1] += 1
+                print(f"Fiole {typ} : {nb_j0} vs {nb_j1} => equipe 2 gagne")
 
             else:
-                print(f"Fiole {type_f} : {nb_j0} vs {nb_j1} -> personne")
+                print(f"Fiole {typ} : {nb_j0} vs {nb_j1} => personne")
 
         print(f"Score cumule: {score[0]}-{score[1]}")
+
+        # mettre a jour les historiques pour les strategies
+        if use_strategies and allocs_episode[0] is not None and allocs_episode[1] is not None:
+            historiques[0].append((allocs_episode[0], allocs_episode[1], (pts_ep[0], pts_ep[1])))
+            historiques[1].append((allocs_episode[1], allocs_episode[0], (pts_ep[1], pts_ep[0])))
 
 
         # remettre les joueurs à leur pos initiale a la fin de l'episode
