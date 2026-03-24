@@ -260,19 +260,13 @@ class MetaStrategie(Strategie):
         alloc = list(alloc)
         for b in self.idx_bleues:
             # si on a assez d'historique, verifier que l'adversaire met pas toujours 0
+            adv_met_zero = False
             if len(self.hist_adv) >= 3:
                 recents = self.hist_adv[-min(5, len(self.hist_adv)):]
                 nb_zero = sum(1 for a in recents if a[b] == 0)
-                # si l'adversaire met 0 tout le temps c pas la peine
-                if nb_zero == len(recents):
-                    continue
+                adv_met_zero = nb_zero == len(recents)
 
-            # forcer 1 joueur sur cette bleue
-            if alloc[b] == 1:
-                continue
-            if alloc[b] == 0:
-                # si la strategie a mis 0 ici, c'est que les joueurs sont mieux ailleurs
-                # on touche pas ca vaut pas le coup de sacrifier une autre fiole
+            if alloc[b] <= 1:
                 continue
 
             # alloc[b] >= 2 on redistribue le surplus
