@@ -3,12 +3,14 @@ import random
 import json
 import os
 
-def generer_allocations(nb_joueurs, nb_fioles):
+def generer_allocations(nb_joueurs, nb_fioles, max_allocs = 15000):
     # etoiles et barres : C(n+k-1, k-1) nb combinaisons possible
 
     allocs = []
 
     def rec(restant, nb_f, courant):
+        if len(allocs) >= max_allocs:
+            return
         if nb_f == 1:
             allocs.append(tuple(courant + [restant]))
             return
@@ -129,6 +131,22 @@ def best_response(types_fioles, alloc_adv, allocations):
     return best
 
 
+def charger_nb_joueurs(nom_carte):
+    # compte le nombre de joueurs par equipe depuis le JSON
+    chemin = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                          'pySpriteWorld', 'Cartes', nom_carte + '.json')
+    with open(chemin) as f:
+        carte = json.load(f)
+
+    nb_joueurs = 0
+    for layer in carte['layers']:
+        if layer['name'] == 'joueur':
+            nb_joueurs = sum(1 for val in layer['data'] if val > 0)
+            break
+    # total des 2 equipes, on divise par 2
+    return nb_joueurs // 2
+
+
 def analyser_allocations(types_fioles, allocations, k=10, nb_sample=1000):
     # trouve la meilleure alloc fixe et le top-k en 
 
@@ -153,12 +171,15 @@ def analyser_allocations(types_fioles, allocations, k=10, nb_sample=1000):
     return meilleure, top
 
 
-def preparer_carte(nom_carte, nb_joueurs=8):
+def preparer_carte(nom_carte, nb_joueurs=None):
     # prepare toutes les donnees pour une carte : types, allocations, meilleures allocs
     # on fait ca une fois par carte et on reutilise partout pour eviter de recalculer
+    # si nb_joueurs est pas donne, on le lit depuis le JSON de la carte
 
     print(f"Preparation de {nom_carte}")
     types = charger_types_fioles(nom_carte)
+    if nb_joueurs is None:
+        nb_joueurs = charger_nb_joueurs(nom_carte)
     allocs = generer_allocations(nb_joueurs, len(types))
     
     print(f"{len(types)} fioles ({', '.join(types)})")
@@ -167,4 +188,4 @@ def preparer_carte(nom_carte, nb_joueurs=8):
     meilleure, top = analyser_allocations(types, allocs, k=10)
     print(f" Meilleure alloc fixe: {meilleure}")
 
-    return {'nom': nom_carte,'types': types,'allocations': allocs,'meilleure_fixe': meilleure,'top_allocs': top,}
+    return {'nom': nom_carte,'types': types,'allocations': allocs,'meilleure_fixe': meilleure,'top_allocs': top,'nb_joueurs': nb_joueurs,}
