@@ -5,18 +5,20 @@ import os
 
 def generer_allocations(nb_joueurs, nb_fioles, max_allocs = 15000):
     # etoiles et barres : C(n+k-1, k-1) nb combinaisons possible
+    # on genere tout puis on echantillonne pour eviter le biais
 
     allocs = []
 
     def rec(restant, nb_f, courant):
-        if len(allocs) >= max_allocs:
-            return
         if nb_f == 1:
             allocs.append(tuple(courant + [restant]))
             return
         for i in range(restant + 1):
             rec(restant - i, nb_f - 1, courant + [i])
     rec(nb_joueurs, nb_fioles, [])
+
+    if len(allocs) > max_allocs:
+        allocs = random.sample(allocs, max_allocs)
 
     return allocs
 
