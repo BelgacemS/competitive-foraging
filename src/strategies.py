@@ -87,7 +87,7 @@ class FictitiousPlay(Strategie):
             p0, p1 = calculer_score(alloc, alloc_adv, self.types_fioles)
             self.gains[i] += p0 - p1                                                                    
                                                                                                         
-        # jouer l'alloc avec le meilleur gain cumule                                                    
+        # jouer l'alloc avec le meilleur gai cumule                                                    
         return self.allocations[np.argmax(self.gains)]                                                  
                                                                                                         
     def reset(self):
@@ -98,17 +98,20 @@ class RegretMatching(Strategie):
       def __init__(self, types_fioles, allocations=None, meilleure_fixe=None, top_allocs=None, nb_joueurs=8):
           super().__init__("regret", types_fioles, nb_joueurs=nb_joueurs, allocations=allocations, meilleure_fixe=meilleure_fixe, top_allocs=top_allocs)
 
-          self.regrets = np.zeros(len(self.allocations))
+          if self.top_allocs is None:
+              _, self.top_allocs = analyser_allocations(types_fioles, self.allocations)
+
+          self.regrets = np.zeros(len(self.top_allocs))
 
       def choisir(self, historique, mon_equipe):
           if len(historique) == 0:
-              return self.meilleure_fixe or random.choice(self.allocations)
+              return self.meilleure_fixe or random.choice(self.top_allocs)
 
           # mettre a jour les regrets avec le dernier tour
           _, alloc_adv, (mon_pts, ses_pts) = historique[-1]
           gain_reel = mon_pts - ses_pts
 
-          for i, alloc_alt in enumerate(self.allocations):
+          for i, alloc_alt in enumerate(self.top_allocs):
               p0, p1 = calculer_score(alloc_alt, alloc_adv, self.types_fioles)
               gain_alt = p0 - p1
               self.regrets[i] += gain_alt - gain_reel
@@ -117,14 +120,14 @@ class RegretMatching(Strategie):
           reg_pos = np.maximum(self.regrets, 0)
           total = reg_pos.sum()
           if total <= 0:
-              return random.choice(self.allocations)
-          
+              return self.meilleure_fixe or random.choice(self.top_allocs)
+
           probas = reg_pos / total
-          idx = np.random.choice(len(self.allocations), p=probas)
-          return self.allocations[idx]
+          idx = np.random.choice(len(self.top_allocs), p=probas)
+          return self.top_allocs[idx]
 
       def reset(self):
-          self.regrets = np.zeros(len(self.allocations))
+          self.regrets = np.zeros(len(self.top_allocs))
 
 class MetaStrategie(Strategie):
     def __init__(self, types_fioles, allocations=None, meilleure_fixe=None, top_allocs=None, nb_joueurs=8):
@@ -190,37 +193,37 @@ class MetaStrategie(Strategie):
                 self.weighted_gains[i] += gain_alt
                 self.regrets[i] += gain_alt - gain_reel
 
-        # cas special : carte toute bleue => spread pas de besoin de classzr l'adv
-        if self.all_blue and self.spread_blue:
-            return self.spread_blue
-
-        # exploration : 1 seul tour suffit, on prend au hasard
+        # tour 0 : pas d'historique -> jouer le defaut
         if nb_tours < 1:
             return self._alloc_defaut()
 
-        # classifier l'adversaire ou reclassifier tous les 8 tours
-        if self.classification is None or nb_tours - self.dernier_recalcul >= 8:
+        # classifier l'adversaire ou reclassifier tous les 5 tours
+        if self.classification is None or nb_tours - self.dernier_recalcul >= 5:
             self.classification = self._classifier()
             self.dernier_recalcul = nb_tours
 
-        # exploitation avec epsilon greedy (le cours de stats/proba qui carry) : 10% du temps on joue une top alloc au hasard
-        if random.random() < 0.1 and self.top_allocs:
+        # epsilon greedy : 5% exploration
+        if random.random() < 0.05 and self.top_allocs:
             alloc = random.choice(self.top_allocs)
-
         elif self.classification == "fixe":
-            # on sait ce qu'il joue -< on fait la best response 
             alloc = best_response(self.types_fioles, self.hist_adv[-1], self.allocations)
+        elif self.classification == "aleatoire":
+            # adversaire aleatoire : varier parmi les top allocs
+            alloc = random.choice(self.top_allocs)
         else:
-            # aleatoire ou adaptatif : weighted best response ca permet de s'adapter si il change de strat au fur des episodes
+            # adaptatif ou pas encore classifie : weighted best response
             alloc = self.allocations[np.argmax(self.weighted_gains)]
 
-        # post traitement : optimiser l'alloc en forcant 1 joueur sur les bleues si ca a pas ete fait avant
-        alloc = self._optimiser_bleues(alloc)
+        # post traitement : optimiser les bleues seulement sur cartes mixtes
+        if not self.all_blue:
+            alloc = self._optimiser_bleues(alloc)
         return alloc
-    
+
 
     def _alloc_defaut(self):
-        # allocation par defaut : on tire au hasard parmi les top allocs
+        # tour 0 : sur carte all-blue on spread sinon on prend un top alloc
+        if self.all_blue and self.spread_blue:
+            return self.spread_blue
         if self.top_allocs:
             alloc = random.choice(self.top_allocs)
         else:
@@ -233,9 +236,14 @@ class MetaStrategie(Strategie):
 
         recents = self.hist_adv[-min(10, len(self.hist_adv)):]
         uniques = set(recents)
-        
-        if len(uniques) <= 2:
+
+        # si tout est identique c'est fixe meme avec peu d'observations
+        if len(uniques) == 1:
             return "fixe"
+
+        # pour les autres classifications attendre 5 observations
+        if len(self.hist_adv) < 5:
+            return None
 
         # entropie de Shannon
         counts = Counter(recents)
@@ -251,25 +259,47 @@ class MetaStrategie(Strategie):
             return "aleatoire"
         return "adaptatif"
 
+    def _top_k_sample(self, values, k=50):
+        # sample proportionnellement parmi les k meilleures allocations par valeur positive
+
+        vals_pos = np.maximum(values, 0)
+        k = min(k, len(values))
+        top_indices = np.argsort(vals_pos)[-k:]
+        top_vals = vals_pos[top_indices]
+        total = top_vals.sum()
+        if total <= 0:
+            return self.meilleure_fixe
+        probas = top_vals / total
+        idx = np.random.choice(top_indices, p=probas)
+        return self.allocations[idx]
+
     def _optimiser_bleues(self, alloc):
-        # sur chaque fiole bleue : forcer exactement 1 joueur sauf si l'adversaire envoie systematiquement 0 dans ce cas on gaspille pas
+        # sur chaque fiole bleue :
+        # - si on a 0 et l'adversaire met 2+ : ajouter un joueur spy (voler 1 joueur d'ailleurs)
+        # - si on a 2+ : reduire a 1 et redistribuer le surplus
 
         if not self.idx_bleues:
             return alloc
 
         alloc = list(alloc)
         for b in self.idx_bleues:
-            # si on a assez d'historique, verifier que l'adversaire met pas toujours 0
-            adv_met_zero = False
-            if len(self.hist_adv) >= 3:
-                recents = self.hist_adv[-min(5, len(self.hist_adv)):]
-                nb_zero = sum(1 for a in recents if a[b] == 0)
-                adv_met_zero = nb_zero == len(recents)
-
-            if alloc[b] <= 1:
+            if alloc[b] == 0:
+                # si l'adversaire met 2+ ici on ajoute un spy pour gagner la fiole
+                if len(self.hist_adv) >= 3:
+                    recents = self.hist_adv[-min(5, len(self.hist_adv)):]
+                    if all(a[b] >= 2 for a in recents):
+                        # voler 1 joueur de la fiole non-bleue la plus chargee
+                        candidats = [i for i in range(len(alloc))
+                                     if i != b and i not in self.idx_bleues and alloc[i] > 1]
+                        if candidats:
+                            max_idx = max(candidats, key=lambda i: alloc[i])
+                            alloc[max_idx] -= 1
+                            alloc[b] = 1
+                continue
+            if alloc[b] == 1:
                 continue
 
-            # alloc[b] >= 2 on redistribue le surplus
+            # alloc[b] >= 2 : redistribuer le surplus
             surplus = alloc[b] - 1
             alloc[b] = 1
             self._redistribuer(alloc, surplus, b)
