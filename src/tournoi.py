@@ -176,8 +176,8 @@ def generer_figures(resultats, noms_strats):
             i, j = noms_strats.index(nom_a), noms_strats.index(nom_b)
             total = res['wins_a'] + res['wins_b'] + res['nuls']
             if total > 0:
-                mat[i][j] = res['wins_a'] / total
-                mat[j][i] = res['wins_b'] / total
+                mat[i][j] = (res['wins_a'] + 0.5 * res['nuls']) / total
+                mat[j][i] = (res['wins_b'] + 0.5 * res['nuls']) / total
 
         fig, ax = plt.subplots(figsize=(8, 6))
         im = ax.imshow(mat, cmap='RdYlGn', vmin=0, vmax=1)
