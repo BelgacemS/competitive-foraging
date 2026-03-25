@@ -15,7 +15,7 @@ class Strategie:
         self.meilleure_fixe = meilleure_fixe
         self.top_allocs = top_allocs
 
-    def choisir(self, historique, mon_equipe): # histo c'est une 
+    def choisir(self, historique, mon_equipe): # histo c'est une liste de tuples
         raise NotImplementedError
 
     def reset(self):
@@ -34,7 +34,7 @@ class Tetu(Strategie):
     def __init__(self, types_fioles, alloc_fixe=None, allocations=None, meilleure_fixe=None, top_allocs=None, nb_joueurs=8):
         super().__init__("tetu", types_fioles, nb_joueurs=nb_joueurs, allocations=allocations, meilleure_fixe=meilleure_fixe, top_allocs=top_allocs)
         
-        self.alloc_fixe = alloc_fixe or self.meilleure_fixe #celle donner par prepare_carte
+        self.alloc_fixe = alloc_fixe or self.meilleure_fixe # celle donner par prepare_carte
         
         if self.alloc_fixe is None:
             self.alloc_fixe, _ = analyser_allocations(types_fioles, self.allocations)
