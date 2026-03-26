@@ -258,8 +258,6 @@ La mécanique spy des fioles bleues (1 joueur bat 2+) crée une dynamique unique
 
 - Meta 10-0 contre expert, coordonne, regret : ces stratégies jouent depuis les top_allocs sans chercher le counter spécifique au spread. Les spies de meta captent les fioles où l'adversaire concentre 2+ joueurs, et l'adversaire ne parvient pas à exploiter les fioles où meta a son surplus.
 
-- Meta 0W-10D contre tetu : tetu joue aussi une allocation fixe similaire au spread (type `(1, 1, 10, 1, ...)`). Les deux jouent des spreads symétriques, chacun espionne le surplus de l'autre, résultat : draws systématiques.
-
 - Fictitious 10-0 contre meta : c'est le résultat le plus intéressant. Meta joue toujours le même spread_blue (allocation fixe). Fictitious, avec ses 15 000 allocations et son argmax, trouve le counter optimal en 1 tour : il place 1 spy sur chaque fiole où meta a du surplus (8 et 3), et concentre le reste sur une seule fiole. Résultat par épisode : fictitious gagne 2 fioles (spy sur le surplus de meta), meta gagne 1 fiole (spy sur la concentration de fictitious), 5 fioles à personne. Score : 2-1 par épisode, soit ~100-50 sur 50 épisodes.
 
 #### Le dilemme du surplus sur blue-map
