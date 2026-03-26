@@ -109,7 +109,7 @@ Chemin d'appel :
    - Accumule dans `gains[i] += p0 - p1`
    - Joue `allocations[np.argmax(gains)]`
 
-C'est la stratégie qui fait le plus d'appels à `calculer_score` par tour (15 000 appels). Robinson (1951) a prouvé que fictitious play converge vers un équilibre de Nash dans les jeux à deux joueurs à somme nulle. Contre un adversaire fixe, il trouve le meilleur counter en 1 tour. Contre un adversaire adaptatif, les deux finissent par converger vers l'équilibre.
+C'est la stratégie qui fait le plus d'appels à `calculer_score` par tour (15 000 appels). Robinsonje c a prouvé que fictitious play converge vers un équilibre de Nash dans les jeux à deux joueurs à somme nulle. Contre un adversaire fixe, il trouve le meilleur counter en 1 tour. Contre un adversaire adaptatif, les deux finissent par converger vers l'équilibre.
 
 ### 6. Regret Matching (`regret`)
 
@@ -133,7 +133,7 @@ La différence clé avec fictitious : fictitious itère sur 15 000 allocations e
 
 ### 7. Méta Stratégie (`meta`)
 
-Notre stratégie state-of-the-art qui combine plusieurs techniques pour s'adapter à n'importe quel adversaire. L'idée : au lieu d'utiliser un seul algorithme, on classifie l'adversaire et on adapte notre réponse.
+Notre stratégie qui combine plusieurs techniques pour s'adapter à n'importe quel adversaire. L'idée : au lieu d'utiliser un seul algorithme, on classifie l'adversaire et on adapte notre réponse.
 
 #### Classification de l'adversaire
 
