@@ -8,191 +8,118 @@
 
 ## Description des choix importants d'implémentation
 
-### Architecture générale
+### Architecture
 
-On a séparé le code en trois modules principaux :
-- `utils.py` : toutes les fonctions de base (scoring, génération d'allocations, analyse)
-- `strategies.py` : les 7 stratégies d'allocation, de la plus simple à la plus avancée
-- `tournoi.py` : le système de round-robin pour évaluer les stratégies sans pygame
+On a découpé le code en trois fichiers :
+- `utils.py` pour les fonctions de base (scoring, allocations, analyse)
+- `strategies.py` pour les 7 stratégies
+- `tournoi.py` pour le round-robin automatique
 
-L'idée c'est de pouvoir tester les stratégies rapidement sans lancer le jeu graphique. Le tournoi simule des matchs en utilisant directement la fonction de scoring, sans A*, sans sprites, sans affichage. Ca permet de faire tourner 1050 matchs en ~40 minutes au lieu de plusieurs heures.
+On s'est vite rendu compte qu'il fallait un moyen de tester les stratégies sans lancer pygame a chaque fois. Du coup on a codé un tournoi qui simule les matchs directement avec la fonction de scoring sans passer par le A* et les sprites. Ca nous permet de lancer 1050 matchs en environ 40 min ce qui aurait pris des heures avec l'affichage.
 
 ### Fonctions principales de `utils.py`
 
-#### `generer_allocations(nb_joueurs, nb_fioles, max_allocs=15000)`
+**`generer_allocations(nb_joueurs, nb_fioles, max_allocs=15000)`** : génère toutes les répartitions possibles de joueurs sur les fioles. Par exemple avec 8 joueurs et 5 fioles, `(3, 2, 1, 1, 1)` veut dire 3 joueurs sur la fiole 0, 2 sur la 1, etc. On utilise l'algorithme étoiles et barres, ca donne C(n+k-1, k-1) allocations. Sur les petites cartes (8 joueurs, 5 fioles) y a 495 allocations, c'est correct. Mais sur les grandes (17 joueurs, 8 fioles) ca monte a 346 104 et la c'est trop lent. Du coup on genere tout et on sample 15 000 avec `random.sample`. Au debut on tronquait la récursion a 15 000 mais ca créait un biais : les premieres fioles avaient toujours 0 joueurs parce que la récursion explore dans l'ordre (0, 0, ..., n). Le random sample règle ce problème.
 
-Génère toutes les façons de répartir les joueurs sur les fioles. Une allocation c'est un tuple qui dit combien de joueurs on envoie sur chaque fiole. Par exemple avec 8 joueurs et 5 fioles, `(3, 2, 1, 1, 1)` veut dire 3 joueurs sur la fiole 0, 2 sur la fiole 1, etc.
+**`score_fiole(type_fiole, nb_j0, nb_j1)`** : détermine qui gagne une fiole selon son type et le nombre de joueurs de chaque équipe. Jaune = seuil 1 puis majorité, rouge = seuil 2 puis majorité, verte = total >= 3 puis majorité, bleue = mécanique spy (1 seul joueur bat un groupe de 2+) sinon seuil 2 puis majorité.
 
-On utilise l'algorithme étoiles et barres via une récursion : Ca donne C(n+k-1, k-1) allocations au total.
+**`calculer_score(alloc0, alloc1, types_fioles, priorite=0)`** : calcule le score total d'un épisode en appelant `score_fiole` sur chaque fiole. Gère aussi le cas ou les deux équipes mettent plus de 8 joueurs combinés sur une fiole (l'équipe prioritaire se place en premier, l'autre prend les places restantes, la priorité alterne a chaque épisode).
 
-Sur les petites cartes (8 joueurs, 5 fioles), il y a 495 allocations, c'est gérable. Mais sur les grandes cartes (17 joueurs, 8 fioles), on atteint 346 104 allocations. C'est trop lent pour les algorithmes qui itèrent dessus à chaque tour. Notre solution : on génère tout puis on échantillonne aléatoirement 15 000 avec `random.sample`.
+**`analyser_allocations(types_fioles, allocations, k=10, nb_sample=1000)`** : pour trouver les meilleures allocations, on teste chacune contre 1000 adversaires aléatoires et on garde les 10 qui gagnent le plus (top_allocs) + la meilleure (meilleure_fixe). C'est calculé une seule fois par carte au début.
 
-#### `score_fiole(type_fiole, nb_j0, nb_j1)`
+**`best_response(types_fioles, alloc_adv, allocations)`** : teste les 15 000 allocations contre un coup adverse donné et retourne la meilleure. Utilisé par meta quand elle détecte un adversaire fixe.
 
-Calcule qui gagne une fiole en fonction de son type et du nombre de joueurs de chaque équipe. Les règles varient selon le type :
+**`preparer_carte(nom_carte)`** : charge la carte (types de fioles, nombre de joueurs depuis le JSON), génère les allocations, lance l'analyse. Retourne un dico avec tout ce qu'il faut.
 
-#### `calculer_score(alloc0, alloc1, types_fioles, priorite=0)`
+### Contrainte physique
 
-Calcule le score d'un épisode en appelant `score_fiole` sur chaque fiole. Gère aussi le cas où les deux équipes mettent plus de 8 joueurs combinés sur une fiole : l'équipe prioritaire (qui alterne à chaque épisode) se place en premier, l'autre occupe les places restantes.
+Chaque fiole a 8 cases autour donc max 8 joueurs dessus. Dans le tournoi, `appliquer_contrainte_physique` cap a 8 et redistribue le surplus sur les fioles les moins chargées. `calculer_score` gère aussi le cas ou les deux équipes combinées dépassent 8 sur une fiole (priorité alternée).
 
-#### `analyser_allocations(types_fioles, allocations, k=10, nb_sample=1000)`
+### Pourquoi 50 épisodes
 
-Evalue toutes les allocations pour trouver les meilleures. Pour chaque allocation, on simule des matchs contre un échantillon de 1000 adversaires aléatoires et on compte les victoires. On retourne la `meilleure_fixe` (celle qui gagne le plus souvent) et les `top_allocs` (les k=10 meilleures). Ces résultats sont pré-calculés une fois par carte et réutilisés par toutes les stratégies.
-
-#### `preparer_carte(nom_carte)`
-
-Point d'entrée qui orchestre tout : charge les types de fioles depuis le JSON, détecte le nombre de joueurs, génère les allocations et lance `analyser_allocations`. Retourne un dictionnaire avec tout ce qu'il faut pour créer les stratégies.
-
-#### `best_response(types_fioles, alloc_adv, allocations)`
-
-Teste toutes les allocations contre une allocation adverse fixe et retourne celle qui maximise le gain (notre score - score adverse). C'est utilisé par meta quand elle détecte un adversaire fixe.
-
-### Contrainte physique (max 8 par fiole)
-
-Sur le plateau de jeu, chaque fiole a 8 cases adjacentes. On ne peut pas placer plus de 8 joueurs autour d'une fiole. Dans le tournoi, on simule cette contrainte avec `appliquer_contrainte_physique` : si une allocation met plus de 8 joueurs sur une fiole, le surplus est redistribué sur les fioles les moins chargées. La fonction `calculer_score` gère aussi le cas où les deux équipes combinées dépassent 8 sur une même fiole, avec le système de priorité alternée.
-
-### Choix de 50 épisodes par match
-
-On joue 50 épisodes par match avec 10 runs par matchup. C'est un compromis entre significativité statistique et temps de calcul. Avec 7 stratégies, 5 cartes et 10 runs, ça fait 1050 matchs. Chaque match implique des itérations sur 15 000 allocations pour les stratégies adaptatives (fictitious, meta), donc le temps total est d'environ 40 minutes. Plus d'épisodes permettrait une meilleure convergence des stratégies adaptatives mais rendrait le tournoi trop long.
+On joue 50 épisodes par match, 10 runs par matchup. C'est un compromis : avec 7 strats, 5 cartes et 10 runs ca fait 1050 matchs. Chaque match itère sur 15 000 allocations pour les strats adaptatives du coup le total tourne autour de 40 min. On aurait aimé plus d'épisodes (meilleure convergence par exemple pour regret matching) mais le temps de calcul explosait.
 
 ## Description des stratégies proposées
 
-On a implémenté 7 stratégies, classées de la plus simple à la plus complexe. Chaque stratégie hérite de la classe `Strategie` qui définit l'interface commune : une méthode `choisir(historique, mon_equipe)` qui retourne une allocation.
+On a 7 stratégies qui héritent toutes de `Strategie`. L'interface est simple : `choisir(historique, mon_equipe)` retourne une allocation.
 
-### 1. Aléatoire Uniforme (`aleatoire`)
+### 1. Aléatoire Uniforme
 
-La stratégie de base : elle tire une allocation au hasard parmi toutes les allocations possibles. C'est notre référence pour évaluer les autres, une stratégie qui ne bat même pas l'aléatoire n'a pas d'intérêt. En pratique, avec 15 000 allocations, la probabilité de tomber sur une bonne est très faible, donc elle perd contre tout le monde.
+La baseline. Elle tire au hasard parmi les 15 000 allocations. Sans surprise elle perd contre tout le monde vu que la proba de tomber sur une bonne allocation est d'environ 0.07%. Ca sert juste de référence : si une stratégie fait pas mieux que ca, "elle sert a rien".
 
-Chemin d'appel :
-1. `creer_strategie("aleatoire", types, carte_data)` crée une instance avec les allocations pré-générées
-2. A chaque tour, `choisir()` appelle `random.choice(self.allocations)` sur les 15 000 allocations
-3. L'allocation retournée est passée à `appliquer_contrainte_physique()` puis à `calculer_score()` dans le tournoi
+A chaque tour : `random.choice(self.allocations)`, c'est tout.
 
-### 2. Têtu (`tetu`)
+### 2. Têtu
 
-Joue toujours la même allocation : la `meilleure_fixe`, calculée par `analyser_allocations`. Cette fonction évalue chaque allocation contre un échantillon d'adversaires aléatoires et garde celle qui gagne le plus souvent. C'est la meilleure stratégie si l'adversaire est aléatoire, mais elle est prédictible, un adversaire adaptatif peut la contrer facilement.
+Joue toujours la meme allocation, la `meilleure_fixe` calculée par `analyser_allocations`. C'est la meilleure contre un adversaire aléatoire, mais c'est prédictible : un adversaire adaptatif la counter en un tour.
 
-Chemin d'appel :
-1. A l'initialisation, récupère `meilleure_fixe` depuis `carte_data` (pré-calculée par `preparer_carte` → `analyser_allocations`)
-2. A chaque tour, `choisir()` retourne toujours `self.alloc_fixe` (= `meilleure_fixe`)
-3. Aucun appel à des fonctions de utils pendant le jeu, tout est décidé à l'init
+A l'init il récupère `meilleure_fixe` depuis les données de la carte. Après il retourne ca a chaque tour, aucun calcul pendant le jeu.
 
-### 3. Aléatoire Expert (`expert`)
+### 3. Aléatoire Expert
 
-Tire au hasard parmi les 10 meilleures allocations (top_allocs) au lieu de toutes. Ces top allocations sont pré-calculées par `analyser_allocations` qui classe les allocations par win rate contre des adversaires aléatoires. C'est mieux que l'aléatoire pur car les options sont filtrées, mais ça reste non-adaptatif.
+Tire au hasard parmi les 10 meilleures allocations (top_allocs) au lieu des 15 000. Mieux que l'aléatoire pur car les options sont filtrées mais toujours pas adaptatif.
 
-Chemin d'appel :
-1. A l'initialisation, récupère `top_allocs` depuis `carte_data` (les 10 meilleures de `analyser_allocations`)
-2. A chaque tour, `choisir()` appelle `random.choice(self.top_allocs)` sur les 10 meilleures
-3. Comme têtu, pas d'appel à utils pendant le jeu
+A chaque tour : `random.choice(self.top_allocs)`.
 
-### 4. Aléatoire Coordonné (`coordonne`)
+### 4. Aléatoire Coordonné
 
-Comme expert mais avec des poids : les allocations les plus concentrées (celles avec un max plus élevé) sont jouées plus souvent. L'intuition c'est que concentrer ses joueurs est souvent plus efficace que les disperser (surtout sur les fioles vertes et rouges qui nécessitent un seuil minimum). Les poids sont calculés comme `max(allocation)` normalisé.
+Comme expert mais avec des poids : les allocations concentrées sont jouées plus souvent. On pondère par `max(alloc)` donc une allocation comme`(5, 3, 0, 0, 0)` (max=5) est tirée plus souvent que `(2, 2, 2, 1, 1)` (max=2). L'idée c'est que concentrer ses joueurs aide a dépasser les seuils (rouge, verte).
 
-Chemin d'appel :
-1. A l'initialisation, calcule les poids `max(alloc)` pour chaque top_alloc et normalise
-2. A chaque tour, `choisir()` fait un `np.random.choice` pondéré sur les top_allocs
-3. Les allocations concentrées (ex: `(5, 3, 0, 0, 0)` avec max=5) sont tirées plus souvent que les étalées (ex: `(2, 2, 2, 1, 1)` avec max=2)
+A noter : sur yellow-map ou les top_allocs sont toutes des permutations de `(2, 2, 2, 1, 1)`, le max est 2 pour toutes donc la pondération change rien. Ca fait une vraie différence que sur les cartes avec des top_allocs variées (green, mixed).
 
-### 5. Fictitious Play (`fictitious`)
+### 5. Fictitious Play
 
-Premier algorithme adaptatif. On joue la meilleure réponse à la distribution empirique des coups adverses.
+C'est la ou ca devient intéressant. Fictitious play est un algorithme classique de théorie des jeux : on joue la meilleure réponse a ce que l'adversaire a joué en moyenne. La littérature a montré que ca converge vers un équilibre de Nash dans les jeux a 2 joueurs somme nulle.
 
-Concrètement, pour chaque allocation possible, on accumule le gain (notre score - score adversaire) qu'elle aurait donné contre chaque coup adverse passé. Puis on joue l'allocation avec le gain cumulé le plus élevé (`argmax`).
+Concrètement, pour chaque allocation possible on accumule le gain qu'elle aurait donné contre chaque coup adverse passé (`gains[i] += p0 - p1`). Puis on joue celle avec le plus gros gain cumulé (`argmax`). C'est la strategie qui fait le plus d'appels a `calculer_score` par tour (15 000 appels). Au tour 0, pas d'historique donc on joue `meilleure_fixe`.
 
-Chemin d'appel :
-1. Tour 0 : joue `meilleure_fixe` (pas d'historique)
-2. Tour t > 0 :
-   - Récupère `alloc_adv = historique[-1][1]` (le dernier coup adverse)
-   - Pour chaque allocation i parmi les 15 000 : appelle `calculer_score(alloc_i, alloc_adv, types)` pour obtenir le gain hypothétique
-   - Accumule dans `gains[i] += p0 - p1`
-   - Joue `allocations[np.argmax(gains)]`
+Le point important c'est que fictitious est déterministe : il prend toujours le meilleur (argmax). Pas de hasard dans le choix. Ca le rend précis mais aussi prédictible une fois convergé.
 
-C'est la stratégie qui fait le plus d'appels à `calculer_score` par tour (15 000 appels). Robinsonje c a prouvé que fictitious play converge vers un équilibre de Nash dans les jeux à deux joueurs à somme nulle. Contre un adversaire fixe, il trouve le meilleur counter en 1 tour. Contre un adversaire adaptatif, les deux finissent par converger vers l'équilibre.
+### 6. Regret Matching
 
-### 6. Regret Matching (`regret`)
+Le principe : on joue proportionnellement aux regrets positifs. Le regret d'une action c'est "combien j'aurais gagné de plus si j'avais joué ca au lieu de ce que j'ai réellement fait". On accumule ces regrets, on garde les positifs, on normalise en probas et on sample.
 
-Le principe : en jouant proportionnellement aux regrets positifs, le regret moyen converge vers 0, ce qui signifie qu'on approche un équilibre corrélé.
+On a restreint l'espace d'actions aux 10 top_allocs au lieu des 15 000. On a testé avec plus (20, 50) mais ca rendait le sampling trop dilué. La borne de convergence est O(sqrt(ln(N)/T)) : avec N=15 000 et T=50 le regret moyen est environ 0.44 (ca converge pas), avec N=10 c'est ~0.21 (ca commence a converger). C'est un compromis entre exploration et convergence.
 
-Le regret d'une action c'est "combien j'aurais gagné de plus si j'avais joué cette action au lieu de ce que j'ai réellement joué". On accumule les regrets de chaque allocation, on garde les positifs et on sample proportionnellement.
+La grosse différence avec fictitious : fictitious itère sur 15 000 et prend le meilleur (déterministe), regret itère sur 10 et tire au dé (stohcastique).
 
-Notre implémentation utilise les `top_allocs` (10 meilleures allocations) comme espace d'actions au lieu des 15 000. C'est un compromis : plus d'allocations donnerait une meilleure exploration de l'espace de jeu, mais la convergence serait plus lente. La borne théorique de convergence est O(√(ln(N)/T)) où N est le nombre d'actions et T le nombre de tours : avec N=15 000 et T=50, le regret moyen est encore ~0.44 (trop bruité pour converger). Avec N=10, on obtient ~0.21, suffisant pour une convergence raisonnable en 50 épisodes. On a testé avec N=20 et N=50 : augmenter N améliore l'exploration mais rend regret trop fort (il converge vers des counters que les autres stratégies ne trouvent pas), au prix d'une plus grande variance entre les runs.
+Si tous les regrets sont négatifs (on a joué le mieux possible), on fallback sur `meilleure_fixe`.
 
-Chemin d'appel :
-1. Tour 0 : joue `meilleure_fixe`
-2. Tour t > 0 :
-   - Récupère `alloc_adv` et `gain_reel = mon_pts - ses_pts` depuis l'historique
-   - Pour chaque top_alloc i (10 seulement) : appelle `calculer_score(top_alloc_i, alloc_adv, types)` pour obtenir `gain_alt`
-   - Met à jour `regrets[i] += gain_alt - gain_reel`
-   - Calcule `reg_pos = max(regrets, 0)`, normalise en probabilités
-   - Sample une allocation avec `np.random.choice(top_allocs, p=probas)`
-   - Si tous les regrets sont négatifs (on a joué le mieux possible), joue `meilleure_fixe`
+### 7. Méta Stratégie
 
-La différence clé avec fictitious : fictitious itère sur 15 000 allocations et prend le meilleur (déterministe). Regret itère sur 10 et sample (stochastique). Fictitious est plus précis, regret a de meilleures garanties théoriques mais converge plus lentement.
+C'est notre stratégie principale, celle qu'on a passé le plus de temps a développer. L'idée de base : au lieu de choisir un seul algorithme, on classifie l'adversaire et on adapte la réponse.
 
-### 7. Méta Stratégie (`meta`)
+**Classifieur d'adversaire** : après 5 observations, on calcule l'entropie de Shannon des derniers coups adverses. Entropie basse (strict inférieure à 0.3) = adversaire fixe (comme têtu), entropie haute (strictement superierieur à 0.7) = aléatoire (comme expert), entre les deux = adaptatif (comme fictitious).
 
-Notre stratégie qui combine plusieurs techniques pour s'adapter à n'importe quel adversaire. L'idée : au lieu d'utiliser un seul algorithme, on classifie l'adversaire et on adapte notre réponse.
+**Réponses** :
+- Fixe : `best_response`, on teste les 15 000 allocs contre son dernier coup et on prend la meilleure. C'est le counter parfait.
+- Aléatoire : on joue au hasard parmi les top_allocs. Contre un adversaire imprévisible, diversifier c'est la meilleure défense.
+- Adaptatif : `argmax(weighted_gains)`, comme fictitious play mais avec un decay de 0.85. Le decay oublie les vieilles observations pour réagir plus vite quand l'adversaire change.
 
-#### Classification de l'adversaire
+On reclassifie tous les 5 tours au cas ou l'adversaire change de comportement.
 
-Après 5 observations de l'adversaire, on calcule l'entropie de Shannon de ses derniers coups :
-- Entropie basse (ratio < 0.3) ou 1 seule valeur unique -> adversaire fixe (type têtu)
-- Entropie haute (ratio > 0.7) → adversaire aléatoire (type expert/coordonné)
-- Entropie moyenne → adversaire adaptatif* (type fictitious/regret)
+**Epsilon-greedy** : 5% du temps on joue un top_alloc au hasard pour pas etre trop prédictible.
 
-La détection d'un adversaire fixe est rapide : dès qu'on voit 2 coups identiques consécutifs, on classifie comme "fixe" sans attendre les 5 observations.
+**Blue-map** : sur les cartes tout bleu, meta joue un `spread_blue` fixe a chaque tour. C'est 1 spy par fiole + le surplus concentré sur une fiole (cappé a 8 max ici). C'est la strategies la plus robuste contre les strategies simples (jamais de défaite), meme si fictitious arrive a la counter (voir la section blue-map plus bas).
 
-#### Réponse adaptée
+**Optimisation bleues sur cartes mixtes** : `_optimiser_bleues` fait du spy-in (si l'adversaire met toujours 2+ sur une bleue ou on a 0, on vole un joueur d'ailleurs pour placer un spy) et de la réduction (si on a 2+ sur une bleue, on réduit a 1 et on redistribue le surplus).
 
-- Contre un adversaire fixe : `best_response`  : on teste toutes les 15 000 allocations contre son dernier coup et on prend la meilleure. C'est le counter parfait, il donne le gain maximal possible.
-
-- Contre un adversaire aléatoire : on joue au hasard parmi les `top_allocs`. Contre un adversaire imprévisible, diversifier nos coups est la meilleure défense  : ça évite d'être exploité par un pattern détectable.
-
-- Contre un adversaire adaptatif : comme fictitious play mais avec un decay de 0.85. Le decay donne plus de poids aux observations récentes, ce qui permet de réagir plus vite quand l'adversaire change de stratégie.
-
-#### Exploration epsilon-greedy
-
-5% du temps, on joue une top_alloc au hasard au lieu de suivre la stratégie. C'est le principe de l'epsilon-greedy (vu en cours de stats/proba) : un petit taux d'exploration pour ne pas rester bloqué dans un pattern prédictible.
-
-#### Optimisation pour les cartes bleues
-
-Les fioles bleues ont une mécanique spéciale : un joueur seul (spy) bat un groupe de 2+. C'est un mécanisme de sabotage qui change la dynamique du jeu.
-
-Sur les cartes entièrement bleues (blue-map), on pré-calcule un `spread_blue` au tour 0 : 1 joueur sur chaque fiole, surplus sur une seule fiole (cappé à 8 joueurs max par contrainte physique). Dès le tour 1, on adapte normalement.
-
-Sur les cartes mixtes, `_optimiser_bleues` fait deux choses après chaque choix d'allocation :
-1. Spy-in : si l'adversaire met régulièrement 2+ joueurs sur une fiole bleue où on a 0, on vole 1 joueur d'une autre fiole pour placer un spy et gagner cette fiole gratuitement.
-2. Réduction : si on a 2+ joueurs sur une fiole bleue, on réduit à 1 (un spy suffit) et on redistribue le surplus sur les fioles non-bleues.
-
-#### Reclassification
-
-L'adversaire peut changer de comportement au cours du match. On reclassifie tous les 5 tours pour s'adapter. Par exemple, un adversaire qui commence aléatoire puis converge vers une stratégie fixe sera détecté et contré.
-
-Chemin d'appel complet :
-1. A l'initialisation : `preparer_carte` fournit allocations, top_allocs, meilleure_fixe. Meta pré-calcule `spread_blue` et les indices de fioles par type.
-2. Tour 0 : `_alloc_defaut()` retourne `spread_blue` sur blue-map, sinon `random.choice(top_allocs)` passé dans `_optimiser_bleues`
-3. Tour t > 0 :
-   - Récupère `alloc_adv` et `gain_reel` depuis l'historique
-   - Pour chaque allocation i (15 000) : appelle `calculer_score(alloc_i, alloc_adv, types)`, met à jour `weighted_gains[i]` (avec decay ×0.85) et `regrets[i]` (sans decay)
-   - Si t est multiple de 5 : `_classifier()` reclassifie l'adversaire
-   - 5% chance : exploration (random top_alloc)
-   - Sinon : réponse adaptée selon la classification
-   - Post-traitement : `_optimiser_bleues` sur cartes mixtes
+Chemin d'appel en gros :
+1. Tour 0 : spread_blue sur blue-map sinon random top_alloc
+2. Tour t > 0 : update les weighted_gains (avec decay) pour les 15 000 allocs puis si carte all-blue retourne spread_blue direct sinon classifie et joue en conséquence puis optimise les bleues sur cartes mixtes
 
 ## Description des résultats
 
-### Protocole expérimental
+### Protocole
 
-Le tournoi est un round-robin : chaque paire de stratégies s'affronte sur chaque carte. Pour la significativité statistique, chaque matchup est répété 10 fois (10 runs de 50 épisodes). Le classement compte les victoires totales (un match gagné = 1 victoire, un draw = 0 pour les deux).
+Round-robin : chaque paire de stratégies joue sur chaque carte, 10 runs de 50 épisodes. Le classement compte les victoires (un draw = 0 pour les deux).
 
-Cartes utilisées :
-- yellow-map : 5 fioles jaunes, 8 joueurs/équipe (495 allocations)
-- red-map : 5 fioles rouges, 8 joueurs/équipe (495 allocations)
-- green-map : 8 fioles vertes, 17 joueurs/équipe (15 000 allocations échantillonnées)
-- blue-map : 8 fioles bleues, 17 joueurs/équipe (15 000 allocations échantillonnées)
-- mixed-map : 9 fioles mixtes, 17 joueurs/équipe (15 000 allocations échantillonnées)
+Cartes :
+- yellow-map : 5 jaunes, 8 joueurs (495 allocs)
+- red-map : 5 rouges, 8 joueurs (495 allocs)
+- green-map : 8 vertes, 17 joueurs (15 000 allocs)
+- blue-map : 8 bleues, 17 joueurs (15 000 allocs)
+- mixed-map : 9 mixtes, 17 joueurs (15 000 allocs)
 
 ### Classement global
 
@@ -206,111 +133,83 @@ Cartes utilisées :
 | 6 | tetu | 80 |
 | 7 | aleatoire | 0 |
 
-Meta termine première avec 255 victoires, 15 points devant fictitious (240). On observe une hiérarchie claire en trois paliers : les stratégies adaptatives (meta, fictitious, regret) dominent les stratégies statiques (coordonne, expert, tetu), qui elles-mêmes écrasent l'aléatoire.
+Meta finit première avec 255 victoires, 15 devant fictitious. On voit clairement trois paliers : les adaptatives (meta, fictitious, regret) au dessus des statiques (coordonne, expert, tetu), elles-memes au dessus de l'aléatoire.
 
-### Analyse par carte
+### Yellow-map et Red-map
 
-#### Yellow-map et Red-map (petites cartes, 495 allocations)
+Les petites cartes avec 495 allocations (pas d'échantillonnage). Résultats nets : meta 10-0 contre tout le monde sur yellow, quasi-parfait sur red. Fictitious est second.
 
-Ces cartes sont les plus "propres" car toutes les allocations sont énumérées (pas d'échantillonnage). Les résultats sont très nets :
+**Les draws sur yellow-map** : c'est le résultat le plus surprenant du tournoi. Les strats statiques font toutes des draws entre elles :
 
-- Meta domine tout le monde (10-0 contre chaque adversaire sur yellow, quasi-parfait sur red)
-- Fictitious est second, avec 10-0 contre regret grâce à son approche déterministe (argmax sur 15 000 allocations) vs le sampling bruité de regret (sur 10 top_allocs)
-- Tetu, expert, coordonné et regret font de nombreux draws entre eux sur yellow-map
-
-#### Le phénomène des draws sur yellow-map
-
-C'est un des résultats les plus marquants du tournoi. Sur yellow-map, on observe un nombre anormalement élevé de draws entre les stratégies statiques :
-
-- `tetu vs expert : 0W-10D-0L` (score 59.8 vs 59.8)
-- `tetu vs coordonne : 0W-10D-0L` (score 58.8 vs 58.8)
-- `tetu vs regret : 0W-10D-0L` (score 0.0 vs 0.0 !)
+- `tetu vs regret : 0W-10D-0L` avec un score de 0.0 vs 0.0
+- `tetu vs expert : 0W-10D-0L` 
 - `expert vs coordonne : 0W-10D-0L`
-- `expert vs regret : 0W-10D-0L`
-- `coordonne vs regret : 0W-10D-0L`
+- ect...
 
-Le cas le plus frappant c'est `tetu vs regret : score 0.0 vs 0.0`. Zéro point pour les deux équipes sur 50 épisodes, à chaque run. Comment c'est possible ?
+Le cas tetu vs regret est le plus frappant : zéro point pour les deux sur 50 épisodes, a chaque run. En fait, sur yellow-map, `meilleure_fixe` = `(2, 2, 2, 1, 1)`. Tetu la joue par définition. Regret converge vers la meme parce que c'est la meilleure réponse a elle-meme. Les deux jouent pareil et sur des fioles jaunes, meme nombre de joueurs = égalité = personne marque. D'ou le 0-0.
 
-L'explication est liée à l'équilibre de Nash : sur yellow-map, la `meilleure_fixe` est `(2, 2, 2, 1, 1)`. Tetu la joue à chaque tour par définition. Regret matching, en accumulant ses regrets, converge aussi vers cette allocation car c'est objectivement la meilleure réponse à elle-même. Les deux finissent par jouer exactement la même chose.
+C'est un équilibre de Nash : les deux jouent la meme allocation optimale, aucun peut améliorer unilatéralement. Seules les strats adaptatives (fictitious, meta) cassent ca en trouvant des counters.
 
-Or sur les fioles jaunes, si les deux équipes envoient le même nombre de joueurs (2 vs 2 ou 1 vs 1), c'est une égalité : personne ne marque. Toutes les fioles sont en égalité à chaque épisode, d'où le score 0-0 systématique.
+ Pour tetu vs expert s'expliquent pareil : expert joue des permutations de (2,2,2,1,1) qui sont toutes dans les top_allocs. Chaque permutation gagne autant de fioles qu'elle en perd par rapport a tetu, du coup ca s'équilibre.
 
-C'est un résultat théoriquement cohérent : quand deux stratégies convergent vers le même équilibre de Nash, le jeu se stabilise dans un état où aucun des deux ne peut améliorer sa situation unilatéralement. Les scores 59.8 vs 59.8 pour tetu vs expert s'expliquent de la même façon : expert joue aléatoirement parmi les top_allocs qui sont toutes proches de meilleure_fixe, donc les écarts sont minimes et les scores s'équilibrent.
+### Green-map
 
-Seules les stratégies adaptatives (fictitious et meta) cassent cet équilibre en trouvant des counters spécifiques grâce à leur capacité d'adaptation en temps réel.
+La carte la plus intéressante théoriquement. Les vertes marchent par majorité (total >= 3, celui qui en a le plus gagne). Ca crée un jeu type matching pennies (ce que gagne un joueur est perdu par l'autre) ou aucune stratégie pure domine.
 
-#### Green-map (tout vert)
+Et ca se voit dans les résultats :
+- expert vs meta : 5W-2D-3L, expert gagne
+- coordonne vs meta : 7W-1D-2L
+- regret vs meta : 7W-1D-2L
 
-C'est la carte la plus intéressante théoriquement. Les fioles vertes fonctionnent par majorité : il faut un total ≥ 3 joueurs sur la fiole et la majorité gagne. Cela crée un jeu de type matching pennies où aucune stratégie pure ne domine.
+Meta perd ici parce qu'elle classifie tout le monde comme "aleatoire" et joue des top_allocs au hasard. Mais le classifieur n'apporte rien sur cette carte : c'est un vrai jeu de matching pennies ou la stratégie optimale est mixte. Coordonné fait mieux parce que sa pondération par max favorise les allocations concentrées ce qui marche bien avec la mécanique de majorité. Regret apprend via ses regrets et adapte ses poids ce que meta ne fait pas en mode "aleatoire".
 
-Les résultats le confirment :
-- expert vs meta : 5W-2D-3L → expert bat meta
-- coordonne vs meta : 7W-1D-2L → coordonné aussi
-- regret vs meta : 7W-1D-2L → regret domine meta
+Fait intéressant : fictitious perd aussi contre expert (6-3) et coordonne (5-4) sur green. Parce que fictitious converge vers une allocation fixe (argmax = déterministe) et sur un matching pennies, jouer fixe c'est se faire exploiter. Il "chasse le bruit" de l'adversaire au lieu de jouer l'optimum global.
 
-Green-map est la carte où meta montre ses limites. Meta classifie expert, coordonné et regret comme "aleatoire" (haute entropie) et joue des top_allocs au hasard. Mais sur une carte où la mécanique de majorité crée un jeu de type matching pennies, la classification n'apporte aucun avantage. Pire, les stratégies adverses (même simples comme expert) arrivent à accumuler plus de victoires grâce à la nature symétrique du jeu.
+### Blue-map
 
-C'est cohérent avec le théorème du minimax de von Neumann : sur cette carte, la stratégie optimale est mixte (probabiliste). Aucune stratégie déterministe ou adaptative ne peut dominer. Meta, malgré sa complexité, ne fait pas mieux qu'un simple tirage pondéré parmi les meilleures allocations.
+La carte avec la mécanique spy (1 joueur seul bat un groupe de 2+). Meta joue son `spread_blue` a chaque tour : 1 spy sur chaque fiole + le surplus concentré. Genre `(8, 3, 1, 1, 1, 1, 1, 1)`.
 
-#### Blue-map (tout bleu)
+Résultats :
+- Meta 10-0 contre tetu, expert, coordonne et regret (les spies captent les fioles ou l'adversaire concentre ses joueurs)
+- Fictitious 10-0 contre meta : le résultat le plus intéressant du tournoi
 
-La mécanique spy des fioles bleues (1 joueur bat 2+) crée une dynamique unique. Meta y joue son `spread_blue` à chaque tour : 1 joueur (spy) sur chaque fiole, le surplus concentré sur une seule fiole. Par exemple `(8, 3, 1, 1, 1, 1, 1, 1)`.
+Fictitious trouve le counter au spread_blue en un tour : il met 1 spy sur les fioles ou meta a 8 et 3 (il gagne 2 fioles) et concentre le reste sur une seule fiole (meta gagne 1 avec son spy). Score par épisode : 2-1 pour fictitious soit environ 100-50 sur 50 épisodes.
 
-- Meta 10-0 contre expert, coordonne, regret : ces stratégies jouent depuis les top_allocs sans chercher le counter spécifique au spread. Les spies de meta captent les fioles où l'adversaire concentre 2+ joueurs, et l'adversaire ne parvient pas à exploiter les fioles où meta a son surplus.
+Le dilemme du surplus : avec 17 joueurs et 8 fioles, y a 9 joueurs en surplus (17 - 8). Ce surplus doit aller quelque part et ou qu'on le mette il est vulnérable aux spies adverses. Si on concentre (spread_blue) on minimise les cibles mais l'adversaire peut les cibler précisément. Si on répartit on crée plus de cibles. C'est un jeu qui a pas d'équilibre de Nash en stratégie pure : toute allocation fixe a un counter. Meta choisit le spread parce que c'est la plus robuste (jamais de défaite contre les strats simples) meme si fictitious la counter.
 
-- Fictitious 10-0 contre meta : c'est le résultat le plus intéressant. Meta joue toujours le même spread_blue (allocation fixe). Fictitious, avec ses 15 000 allocations et son argmax, trouve le counter optimal en 1 tour : il place 1 spy sur chaque fiole où meta a du surplus (8 et 3), et concentre le reste sur une seule fiole. Résultat par épisode : fictitious gagne 2 fioles (spy sur le surplus de meta), meta gagne 1 fiole (spy sur la concentration de fictitious), 5 fioles à personne. Score : 2-1 par épisode, soit ~100-50 sur 50 épisodes.
+### Mixed-map
 
-#### Le dilemme du surplus sur blue-map
+La carte la plus complexe (jaune, verte, jaune, rouge, bleue, rouge, jaune, verte, jaune). Meta excelle ici :
 
-C'est un résultat fondamental de cette carte. Avec 17 joueurs et 8 fioles, chaque équipe doit placer un surplus de 9 joueurs quelque part (17 - 8 = 9 joueurs en plus du minimum de 1 par fiole). Or la mécanique spy fait que tout groupe de 2+ joueurs est vulnérable à un spy adverse.
+- 10-0 contre tetu, coordonne, regret
+- 9-0 contre expert
+- Fictitious vs meta : 4W-0D-6L, match serré
 
-C'est un vrai dilemme :
-- Si on concentre le surplus sur 1 fiole (spread_blue) : on minimise le nombre de fioles vulnérables (2 fioles avec 2+), mais l'adversaire peut cibler précisément ces 2 fioles avec des spies.
-- Si on répartit le surplus sur plusieurs fioles : on crée plus de fioles vulnérables, ce qui donne plus de cibles aux spies adverses.
+C'est la carte ou l'optimisation `_optimiser_bleues` aide le plus : quand l'adversaire met 2+ sur la fiole bleue, meta vole un joueur pour placer un spy et gagne la fiole gratuitement.
 
-Dans les deux cas, l'adversaire peut exploiter le surplus avec des spies. C'est un jeu qui n'a pas d'équilibre de Nash en stratégie pure : toute allocation fixe a un counter qui la bat. La stratégie optimale serait mixte (varier aléatoirement le placement du surplus), mais ça nécessiterait de sacrifier la stabilité du spread.
+### Pourquoi meta gagne le tournoi
 
-Meta fait le choix de jouer spread_blue à chaque tour : c'est la stratégie la plus robuste contre les stratégies simples (0 défaite, que des victoires ou draws), au prix d'une vulnérabilité face à fictitious qui exploite la prédictibilité du spread fixe.
+En gros meta combine trois trucs que les autres ont pas en meme temps :
+1. Counter immédiat des fixes via best_response (mieux que la convergence lente de fictitious/regret)
+2. Diversification contre les aléatoires (random top_allocs)
+3. Les optim spécifiques (spy-in, spread_blue)
 
-#### Mixed-map (carte mixte)
+### Pourquoi fictitious bat regret
 
-La carte la plus complexe avec 4 types de fioles (jaune, verte, jaune, rouge, bleue, rouge, jaune, verte, jaune). Meta excelle ici grâce à ses optimisations spécifiques :
+Fictitious cherche dans les 15 000 allocations et prend le meilleur. Regret cherche dans 10 et chosit. La précision de fictitious l'emporte largement : il trouve toujours le bon counter, regret le rate souvent a cause du sampling.
 
-- Meta 10-0 contre tetu, coordonne, regret : le classifier détecte tetu comme "fixe" et joue `best_response`. Contre coordonne et regret, le weighted_gains avec decay et l'optimisation `_optimiser_bleues` donnent l'avantage.
-- Meta 9-0 contre expert : quasi-parfait grâce au classifier
-- Fictitious vs meta : 4W-0D-6L : match serré. Fictitious (argmax déterministe sur 15 000 allocations) est parfois plus précis, mais meta garde un léger avantage grâce à ses optimisations spécifiques sur la fiole bleue de la carte
+### Convergence et théorie des jeux
 
-L'optimisation `_optimiser_bleues` (spy-in) aide meta sur cette carte : quand l'adversaire met régulièrement 2+ joueurs sur la fiole bleue, meta vole un joueur d'une autre fiole pour placer un spy et gagner ce point gratuitement.
+Nos résultats illustrent pas mal de concepts vus en cours :
 
-### Analyse transversale
+**Equilibre de Nash** : les draws a 0-0 sur yellow-map c'est littéralement un équilibre de Nash. Les deux jouent la meme allocation optimale aucun peut améliorer unilatéralement. On avait vu que fictitious play converge vers cet équilibre et c'est ce qu'on observe.
 
-#### Pourquoi meta est première
+**Equilibre corrélé** : regret matching converge vers un équilibre corrélé, plus général que Nash. Avec nos 10 allocations et 50 tours, la convergence est partielle mais suffisante pour battre les strats statiques.
 
-Meta combine trois avantages que les autres stratégies n'ont pas simultanément :
-1. Counter immédiat des adversaires fixes (best_response, meilleur que la convergence graduelle de fictitious/regret)
-2. Robustesse contre les adversaires aléatoires (diversification via top_allocs)
-3. Optimisations spécifiques (spy-in bleue, spread_blue au tour 0)
+**Théorème d'approchabilité de Blackwell** : c'est la garantie théorique derrière regret matching. Le regret moyen tend vers 0 quand T grandit. En pratique avec T=50 c'est pas complètement convergé (regret moyen environ 0.21) ce qui explique que regret fait moins bien que fictitious.
 
-#### Pourquoi fictitious bat regret
+**Pas de stratégie universelle** : meta perd sur green-map, se fait counter par fictitious sur blue-map. Aucune strat domine partout. C'est cohérent avec la théorie : dans un jeu compétitif toute stratégie a des faiblesses.
 
-Fictitious utilise les 15 000 allocations avec `argmax` (déterministe). Regret utilise seulement 10 top_allocs avec sampling proportionnel (stochastique). Le ratio taille d'espace × qualité de sélection favorise largement fictitious :
-- Fictitious explore tout l'espace et choisit le meilleur
-- Regret explore un petit sous-ensemble et ajoute du bruit avec le sampling
+### Choix et impact du nombre d'épisodes
 
-La convergence de regret matching nécessite O(√(ln(N)/T)) tours, soit ~15 tours avec N=10 et T=50. C'est suffisant pour converger sur les petites cartes (yellow, red), mais sur les grandes cartes l'espace restreint de 10 allocations limite sa capacité à trouver les bons counters.
-
-#### Convergence et équilibres
-
-Nos résultats illustrent plusieurs concepts de théorie des jeux :
-
-- Équilibre de Nash : sur les cartes simples (yellow, red), fictitious play converge vers l'équilibre. C'est visible par ses victoires 10-0 contre la plupart des adversaires. Les draws systématiques sur yellow-map (score 0-0 entre tetu et regret) sont une manifestation directe de cet équilibre : les deux jouent la même allocation optimale, aucun ne peut améliorer unilatéralement.
-
-- Équilibre corrélé : regret matching converge vers un équilibre corrélé, un concept plus général que Nash. En pratique, avec notre implémentation restreinte à 10 allocations, la convergence est partielle mais suffisante pour battre les stratégies statiques.
-
-- Théorème d'approchabilité de Blackwell : c'est le résultat théorique sous-jacent qui garantit la convergence de regret matching. Il assure que le regret moyen converge vers 0 quand T tend vers l'infini. En pratique avec T=50, la convergence est partielle, ce qui explique les performances moyennes de regret par rapport à fictitious.
-
-- aucune stratégie ne domine toutes les autres sur toutes les cartes. Meta perd contre regret sur green-map. C'est un résultat fondamental : dans un jeu compétitif, toute stratégie a des faiblesses exploitables.
-
-#### Impact du nombre d'épisodes
-
-Le choix de 50 épisodes par match est un compromis. Avec moins d'épisodes (20), les stratégies adaptatives (fictitious, meta) n'ont pas le temps de converger et les stratégies statiques (tetu) deviennent plus compétitives. Avec plus d'épisodes (100+), les stratégies adaptatives dominent encore plus car elles ont le temps de classifier l'adversaire et d'affiner leur réponse. Le seuil de 50 est le point où les stratégies adaptatives commencent à avoir un avantage clair sans rendre le tournoi trop long.
+Avec 20 épisodes les adaptatives (fictitious, meta) ont pas le temps de converger et les statiques (tetu) sont plus compétitives. Avec 100+ les adaptatives dominent encore plus. 50 c'est le point ou elles commencent a avoir un vrai avantage sans que le tournoi prenne trop longtemps.
