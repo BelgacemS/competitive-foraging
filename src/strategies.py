@@ -197,6 +197,11 @@ class MetaStrategie(Strategie):
         if nb_tours < 1:
             return self._alloc_defaut()
 
+        # carte all-blue : toujours spread (1 spy par fiole, surplus concentre)
+        # au pire on fait egalit au mieux nos spies battent les groupes adverses
+        if self.all_blue and self.spread_blue:
+            return self.spread_blue
+
         # classifier l'adversaire ou reclassifier tous les 5 tours
         if self.classification is None or nb_tours - self.dernier_recalcul >= 5:
             self.classification = self._classifier()
@@ -208,15 +213,13 @@ class MetaStrategie(Strategie):
         elif self.classification == "fixe":
             alloc = best_response(self.types_fioles, self.hist_adv[-1], self.allocations)
         elif self.classification == "aleatoire":
-            # adversaire aleatoire : varier parmi les top allocs
             alloc = random.choice(self.top_allocs)
         else:
             # adaptatif ou pas encore classifie : weighted best response
             alloc = self.allocations[np.argmax(self.weighted_gains)]
 
-        # post traitement : optimiser les bleues seulement sur cartes mixtes
-        if not self.all_blue:
-            alloc = self._optimiser_bleues(alloc)
+        # post traitement : optimiser les bleues sur cartes mixtes
+        alloc = self._optimiser_bleues(alloc)
         return alloc
 
 
