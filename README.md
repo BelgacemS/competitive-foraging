@@ -1,4 +1,4 @@
-# Competitive Level-Based Foraging — Stratégies et Théorie des Jeux
+# Competitive Level-Based Foraging
 
 Simulation d'un jeu stratégique compétitif où deux équipes s'affrontent pour collecter des ressources sur une carte, en appliquant des concepts de **théorie des jeux** (équilibre de Nash, fictitious play, regret matching).
 
